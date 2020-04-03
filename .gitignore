@@ -153,3 +153,6 @@ dmypy.json
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
+
+# Data
+data/*.fa
