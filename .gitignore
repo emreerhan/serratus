@@ -156,3 +156,4 @@ terraform.tfstate.backup
 
 # Data
 data/*.fa
+evaluation/data/*.{aln,fq}
