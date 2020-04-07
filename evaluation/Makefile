@@ -1,25 +1,38 @@
-.PHONY: simulate
+.PHONY: simulate data
 
-# GLOBALS
+#################################################################################
+# GLOBALS                                                                       #
+#################################################################################
 
-cv_pangenome?=../data/cov0.fa
+cv_pangenome?=../data/seq/cov0/cov0.fa
+threads?=32
 
-# COMMANDS
+#################################################################################
+# COMMANDS                                                                      #
+#################################################################################
 
 simulate: coronavirus_sim.log
 
-# RULES 
+data: $(cv_pangenome)
 
-../data/cov0.fa:
-	aws s3 cp s3://serratus-public/seq/cov0/cov0.fa ../data/cov0.fa
+bloom-filter: biobloomtools/cv_minus_avian.bf
 
-coronavirus_sim.log: $(cv_pangenome)
+bloom-categorize: biobloomtools/categorize_avian/_summary.tsv
+
+#################################################################################
+# PROJECT RULES                                                                 #
+#################################################################################
+
+$(cv_pangenome):
+	aws s3 cp s3://serratus-public/seq/cov0/cov0.fa $<
+
+coronavirus_sim.log data/coronavirus1.fq data/coronavirus2.fq: $(cv_pangenome)
 	@echo "Simulating reads with ART Illumina"
 	mkdir -p data
 	art_illumina \
 		--seqSys HS25 \
 		--paired \
-		--in $(cv_pangenome) \
+		--in $< \
 		--len 150 \
 		--fcov 20 \
 		--rndSeed 42 \
@@ -29,25 +42,53 @@ coronavirus_sim.log: $(cv_pangenome)
 		> coronavirus_sim.log
 	mv coronavirus*{aln,fq} data;
 
-.DEFAULT_GOAL: help
+data/complete_genomes.fa: $(cv_pangenome)
+	seqtk seq $< | grep -A1 'complete genome' > data/complete_genomes.fa
+
+data/avian_cv.fa: data/complete_genomes.fa
+	grep -A1 'Avian' data/complete_genomes.fa > $@
+
+biobloomtools/cv_minus_avian.bf: data/genomes_wo_avian.fa
+	mkdir -p biobloomtools
+	biobloommaker -p cv_minus_avian -o biobloomtools/ -t $(threads) $<
+
+biobloomtools/categorize_avian/_summary.tsv biobloomtools/categorize_avian/_cv_minus_avian.fa: biobloomtools/cv_minus_avian.bf data/coronavirus1.fq data/coronavirus2.fq
+	mkdir -p biobloomtools/categorize_avian
+	biobloomcategorizer \
+		--fa \
+		-p biobloomtools/categorize_avian/ \
+		-f $< \
+		-t $(threads) \
+		data/coronavirus1.fq data/coronavirus2.fq
+
+data/genomes_wo_avian.fa:
+	seqtk seq data/complete_genomes.fa | \
+		grep -A1 'complete genome' | \
+		awk '/Avian/{getline;next} 1' \
+		> data/genomes_wo_avian.fa
+
+#################################################################################
+# Self Documenting Commands                                                     #
+#################################################################################
+
+.DEFAULT_GOAL := help
 
 # Inspired by <http://marmelab.com/blog/2016/02/29/auto-documented-makefile.html>
 # sed script explained:
 # /^##/:
-#   * save line in hold space
-#   * purge line
-#   * Loop:
-#	   * append newline + line to hold space
-#	   * go to next line
-#	   * if line starts with doc comment, strip comment character off and loop
-#   * remove target prerequisites
-#   * append hold space (+ newline) to line
-#   * replace newline plus comments by `---`
-#   * print line
+# 	* save line in hold space
+# 	* purge line
+# 	* Loop:
+# 		* append newline + line to hold space
+# 		* go to next line
+# 		* if line starts with doc comment, strip comment character off and loop
+# 	* remove target prerequisites
+# 	* append hold space (+ newline) to line
+# 	* replace newline plus comments by `---`
+# 	* print line
 # Separate expressions are necessary because labels cannot be delimited by
 # semicolon; see <http://stackoverflow.com/a/11799865/1968>
 .PHONY: help
-
 help:
 	@echo "$$(tput bold)Available rules:$$(tput sgr0)"
 	@echo
