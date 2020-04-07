@@ -1,4 +1,4 @@
-.PHONY: simulate data
+.PHONY: simulate data bloom-filter bloom-categorize
 
 #################################################################################
 # GLOBALS                                                                       #
@@ -11,12 +11,16 @@ threads?=32
 # COMMANDS                                                                      #
 #################################################################################
 
+## Run ART to simulate reads from the CV pangenome
 simulate: coronavirus_sim.log
 
+## Download the CV pangenome from AWS s3
 data: $(cv_pangenome)
 
+## Create bloom filter of CV pangenome without Avian genomes
 bloom-filter: biobloomtools/cv_minus_avian.bf
 
+## Categorize reads from entire pangenome against CV minus Avian pangenome
 bloom-categorize: biobloomtools/categorize_avian/_summary.tsv
 
 #################################################################################
@@ -24,7 +28,8 @@ bloom-categorize: biobloomtools/categorize_avian/_summary.tsv
 #################################################################################
 
 $(cv_pangenome):
-	aws s3 cp s3://serratus-public/seq/cov0/cov0.fa $<
+	mkdir -p $(shell dirname $@)
+	aws s3 cp s3://serratus-public/seq/cov0/cov0.fa $@
 
 coronavirus_sim.log data/coronavirus1.fq data/coronavirus2.fq: $(cv_pangenome)
 	@echo "Simulating reads with ART Illumina"
@@ -61,7 +66,7 @@ biobloomtools/categorize_avian/_summary.tsv biobloomtools/categorize_avian/_cv_m
 		-t $(threads) \
 		data/coronavirus1.fq data/coronavirus2.fq
 
-data/genomes_wo_avian.fa:
+data/genomes_wo_avian.fa: data/complete_genomes.fa
 	seqtk seq data/complete_genomes.fa | \
 		grep -A1 'complete genome' | \
 		awk '/Avian/{getline;next} 1' \
