@@ -161,3 +161,4 @@ data/seq/*
 evaluation/data/*.aln
 evaluation/data/*.fq
 evaluation/data/*.fa
+evaluation/biobloomtools/*
