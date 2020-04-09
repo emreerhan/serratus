@@ -155,7 +155,9 @@ terraform.tfstate
 terraform.tfstate.backup
 
 # Data
-data/*.fa
+data/seq/*
+
+# Evaluation
 evaluation/data/*.aln
 evaluation/data/*.fq
 evaluation/data/*.fa
